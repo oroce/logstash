@@ -122,8 +122,12 @@ class LogStash::Outputs::Godot < LogStash::Outputs::Base
 
     # Let's build us an event, shall we?
     payload = Hash.new
-    payload[:host] = event.sprintf(@sender)
-    
+    if event["@source_host"]
+      payload[:host] = event["@source_host"]
+    else
+      payload[:host] = event.sprintf(@sender)
+    end
+    payload[:service] = event["@source"]
     payload[:time] = event["@timestamp"].to_i
     payload[:description] = event["message"]
     if @godot_event
