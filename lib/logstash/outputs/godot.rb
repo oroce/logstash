@@ -85,6 +85,12 @@ class LogStash::Outputs::Godot < LogStash::Outputs::Base
   # Enable debugging output?
   config :debug, :validate => :boolean, :default => false
 
+  # Interval between reconnect attempts to godot (when protocol is tcp).
+  config :reconnect_interval, :validate => :number, :default => 2
+
+  # Should metrics be resent on failure?
+  config :resend_on_failure, :validate => :boolean, :default => false
+
   public
   def register
     connect
@@ -94,11 +100,28 @@ class LogStash::Outputs::Godot < LogStash::Outputs::Base
   public
   def connect
     if @protocol == "udp"
-      @socket = UDPSocket.new
+      connect_udp
     else
-      @socket = TCPSocket.new @host, @port
+      connect_tcp
     end
   end # def connect
+
+  public
+  def connect_udp
+    @socket = UDPSocket.new
+  end #def connect_udp
+
+  public
+  def connect_tcp
+    begin
+      @socket = TCPSocket.new @host, @port
+    rescue Errno::ECONNREFUSED => e
+      @logger.warn("Connection refused to godot server, sleeping...",
+                   :host => @host, :port => @port)
+      sleep(@reconnect_interval)
+      retry
+    end
+  end #def connect_tcp
 
   public
   def map_fields(parent, fields)
@@ -153,18 +176,35 @@ class LogStash::Outputs::Godot < LogStash::Outputs::Base
   public
   def send(data)
     if @protocol == "udp"
-      begin
-        @socket.send(data, 0, @host, @port);
-      rescue Exception => e
-        @logger.warn("Unhandled exception in udp", :error => e)
-      end
+      send_udp(data)
     else
-      begin
-        @socket.puts(data)
-      rescue Exception => e
-        @logger.warn("Unhandled exception in tcp", :error => e)
-      end
+      send_tcp(data)
     end
   end # def send
+
+  public
+  def send_udp(data)
+    begin
+      @socket.send(data, 0, @host, @port);
+    rescue Exception => e
+      @logger.warn("Unhandled exception in udp",
+                  :exception => e, :host => @host, :port => @port)
+      sleep(@reconnect_interval)
+      retry if @resend_on_failure
+    end
+  end #def send_udp
+
+  public
+  def send_tcp(data)
+    begin
+      @socket.puts(data)
+    rescue Errno::EPIPE, Errno::ECONNRESET => e
+      @logger.warn("Unhandled exception in tcp",
+                   :exception => e, :host => @host, :port => @port)
+      sleep(@reconnect_interval)
+      connect
+      retry if @resend_on_failure
+    end
+  end # def send_tcp
 
 end # class LogStash::Outputs::Godot
