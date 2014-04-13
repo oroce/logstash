@@ -151,7 +151,8 @@ class LogStash::Outputs::Godot < LogStash::Outputs::Base
       payload[:host] = event.sprintf(@sender)
     end
     payload[:service] = event["service"] or event["@source"]
-    payload[:time] = event["@timestamp"].to_i
+    # javascript epoch is ms
+    payload[:time] = event["@timestamp"].to_i*1000
     payload[:description] = event["message"]
     payload[:meta] = event.to_hash
     payload[:metric] = event["value"]
