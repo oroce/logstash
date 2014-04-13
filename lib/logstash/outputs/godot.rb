@@ -154,6 +154,7 @@ class LogStash::Outputs::Godot < LogStash::Outputs::Base
     payload[:time] = event["@timestamp"].to_i
     payload[:description] = event["message"]
     payload[:meta] = event.to_hash
+    payload[:metric] = event["value"]
     if @godot_event
       @godot_event.each do |key, val|
         if ["ttl","metric"].include?(key)
