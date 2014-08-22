@@ -142,7 +142,10 @@ class LogStash::Outputs::Godot < LogStash::Outputs::Base
   def receive(event)
     @logger.warn( "got the event", :event => event )
     return unless output?(event)
-
+    if event == LogStash::SHUTDOWN
+      finished
+      return
+    end
     # Let's build us an event, shall we?
     payload = Hash.new
     if event["@source_host"]
